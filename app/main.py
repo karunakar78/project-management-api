@@ -18,6 +18,11 @@ class ProjectResponse(BaseModel):
     description: str
 
 
+class ProjectUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+
+
 @app.get("/")
 def root():
     return {"message": "Project Management API"}
@@ -51,3 +56,38 @@ def create_project(project: ProjectCreate):
     projects.append(new_project)
 
     return new_project
+
+
+@app.patch("/projects/{project_id}", response_class=ProjectResponse)
+def project_update(project_id: int, project_update: ProjectUpdate):
+    for project in projects:
+        if project["id"] == project_id:
+
+            if project_update["name"] is not None:
+                project["name"] = project_update["name"]
+
+            if project_update["description"] is not None:
+                project["description"] = project_update["description"]
+
+            return project
+
+    raise HTTPException(
+            status_code=404,
+            detail="Project not found"
+        )
+
+
+@app.delete("/projects/{project_id}")
+def project_delete(project_id: int):
+    for index, project in enumerate(projects):
+        if project["id"] == project_id:
+            project.pop(index)
+
+            return {
+                "message": "Project deleted successfully"
+            }
+    raise HTTPException(
+            status_code=404,
+            detail="Project not found"
+        )
+            
