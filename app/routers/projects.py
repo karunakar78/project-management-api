@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from app.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
 
@@ -9,8 +9,10 @@ projects = []
 
 
 @router.get("/", response_model=list[ProjectResponse])
-def get_projects():
-    return projects
+def get_projects(
+    skip: int = Query(default=0, ge=0), limit: int = Query(default=10, ge=1, le=100)
+):
+    return projects[skip : skip + limit]
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
@@ -35,7 +37,7 @@ def create_project(project: ProjectCreate):
     return new_project
 
 
-@router.patch("/{project_id}", response_class=ProjectResponse)
+@router.patch("/{project_id}", response_model=ProjectResponse)
 def project_update(project_id: int, project_update: ProjectUpdate):
     for project in projects:
         if project["id"] == project_id:
