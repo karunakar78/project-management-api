@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import APIRouter, HTTPException, Query
 
 from app.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
@@ -10,9 +12,25 @@ projects = []
 
 @router.get("/", response_model=list[ProjectResponse])
 def get_projects(
-    skip: int = Query(default=0, ge=0), limit: int = Query(default=10, ge=1, le=100)
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=10, ge=1, le=100),
+    search: str | None = None,
+    sort: Literal["id", "name"] | None = None,
 ):
-    return projects[skip : skip + limit]
+    result = projects
+
+    if search:
+        result = [
+            project for project in result if search.lower() in project["name"].lower()
+        ]
+
+    if sort == "name":
+        result = sorted(result, key=lambda project: project["name"])
+
+    elif sort == "id":
+        result = sorted(result, key=lambda project: project["id"])
+
+    return result[skip : skip + limit]
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
