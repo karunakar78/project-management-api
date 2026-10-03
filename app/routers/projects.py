@@ -1,6 +1,6 @@
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, status
 
 from app.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
 
@@ -41,7 +41,7 @@ def get_project(project_id: int):
     raise HTTPException(status_code=404, detail="Project not found")
 
 
-@router.post("/", response_model=ProjectResponse)
+@router.post("/", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 def create_project(project: ProjectCreate):
     new_project = {
         "id": len(projects) + 1,
@@ -70,11 +70,11 @@ def project_update(project_id: int, project_update: ProjectUpdate):
     raise HTTPException(status_code=404, detail="Project not found")
 
 
-@router.delete("/{project_id}")
+@router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
 def project_delete(project_id: int):
     for index, project in enumerate(projects):
         if project["id"] == project_id:
             project.pop(index)
-
-            return {"message": "Project deleted successfully"}
+            return 
+        
     raise HTTPException(status_code=404, detail="Project not found")
