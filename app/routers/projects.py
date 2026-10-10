@@ -1,36 +1,22 @@
-from typing import Literal
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
 
-from fastapi import APIRouter, HTTPException, Query, status
-
+from app.database import get_db
+from app.models.project import Project
 from app.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
-
-
-projects = []
 
 
 @router.get("/", response_model=list[ProjectResponse])
 def get_projects(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=10, ge=1, le=100),
-    search: str | None = None,
-    sort: Literal["id", "name"] | None = None,
+    db: Session = Depends(get_db)
 ):
-    result = projects
+    projects = db.query(Project).offset(skip).limit(limit).all()
 
-    if search:
-        result = [
-            project for project in result if search.lower() in project["name"].lower()
-        ]
-
-    if sort == "name":
-        result = sorted(result, key=lambda project: project["name"])
-
-    elif sort == "id":
-        result = sorted(result, key=lambda project: project["id"])
-
-    return result[skip : skip + limit]
+    return projects
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
@@ -41,16 +27,23 @@ def get_project(project_id: int):
     raise HTTPException(status_code=404, detail="Project not found")
 
 
-@router.post("/", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
-def create_project(project: ProjectCreate):
-    new_project = {
-        "id": len(projects) + 1,
-        "name": project.name,
-        "description": project.description,
-        # "secret": "hello"
-    }
+@router.post(
+    "/",
+    response_model=ProjectResponse,
+    status_code=status.HTTP_201_CREATED
+)
+def create_project(
+    project: ProjectCreate,
+    db: Session = Depends(get_db)
+):
+    new_project = Project(
+        name=project.name,
+        description=project.description
+    )
 
-    projects.append(new_project)
+    db.add(new_project)
+    db.commit()
+    db.refresh(new_project)
 
     return new_project
 
