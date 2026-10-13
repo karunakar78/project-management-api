@@ -12,7 +12,7 @@ router = APIRouter(prefix="/projects", tags=["Projects"])
 def get_projects(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=10, ge=1, le=100),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     projects = db.query(Project).offset(skip).limit(limit).all()
 
@@ -20,26 +20,18 @@ def get_projects(
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
-def get_project(project_id: int):
-    for project in projects:
-        if project["id"] == project_id:
-            return project
-    raise HTTPException(status_code=404, detail="Project not found")
+def get_project(project_id: int, db: Session = Depends(get_db)):
+    project = db.get(Project, project_id)
+
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    return project
 
 
-@router.post(
-    "/",
-    response_model=ProjectResponse,
-    status_code=status.HTTP_201_CREATED
-)
-def create_project(
-    project: ProjectCreate,
-    db: Session = Depends(get_db)
-):
-    new_project = Project(
-        name=project.name,
-        description=project.description
-    )
+@router.post("/", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
+def create_project(project: ProjectCreate, db: Session = Depends(get_db)):
+    new_project = Project(name=project.name, description=project.description)
 
     db.add(new_project)
     db.commit()
@@ -49,25 +41,31 @@ def create_project(
 
 
 @router.patch("/{project_id}", response_model=ProjectResponse)
-def project_update(project_id: int, project_update: ProjectUpdate):
-    for project in projects:
-        if project["id"] == project_id:
-            if project_update["name"] is not None:
-                project["name"] = project_update["name"]
+def update_project(
+    project_id: int, project_update: ProjectUpdate, db: Session = Depends(get_db)
+):
+    project = db.get(Project, project_id)
 
-            if project_update["description"] is not None:
-                project["description"] = project_update["description"]
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
 
-            return project
+    update_data = project_update.model_dump(exclude_unset=True)
 
-    raise HTTPException(status_code=404, detail="Project not found")
+    for field, value in update_data.items():
+        setattr(project, field, value)
+
+    db.commit()
+    db.refresh(project)
+
+    return project
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
-def project_delete(project_id: int):
-    for index, project in enumerate(projects):
-        if project["id"] == project_id:
-            project.pop(index)
-            return 
-        
-    raise HTTPException(status_code=404, detail="Project not found")
+def delete_project(project_id: int, db: Session = Depends(get_db)):
+    project = db.get(Project, project_id)
+
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    db.delete(project)
+    db.commit()
