@@ -58,7 +58,6 @@ def update_project(
             db, project, project_data
         )
     except SQLAlchemyError:
-        db.rollback()
         raise HTTPException(
             status_code=500,
             detail="Failed to update project"
@@ -78,7 +77,6 @@ def delete_project(
     try:
         project_service.delete_project(db, project)
     except SQLAlchemyError:
-        db.rollback()
         raise HTTPException(
             status_code=500,
             detail="Failed to delete project"

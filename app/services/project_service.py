@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.models.project import Project
 from app.schemas.project import ProjectCreate, ProjectUpdate
 from app.exceptions import ProjectNotFoundError
+from sqlalchemy.exc import SQLAlchemyError
 
 
 def create_project(db: Session, project_data: ProjectCreate):
@@ -11,11 +12,14 @@ def create_project(db: Session, project_data: ProjectCreate):
         description=project_data.description
     )
 
-    db.add(project)
-    db.commit()
-    db.refresh(project)
-
-    return project
+    try:
+        db.add(project)
+        db.commit()
+        db.refresh(project)
+        return project
+    except SQLAlchemyError:
+        db.rollback()
+        raise
 
 
 def get_project(db: Session, project_id: int):
@@ -38,15 +42,22 @@ def update_project(
 ):
     update_data = project_data.model_dump(exclude_unset=True)
 
-    for field, value in update_data.items():
-        setattr(project, field, value)
+    try:
+        for field, value in update_data.items():
+            setattr(project, field, value)
 
-    db.commit()
-    db.refresh(project)
-
-    return project
+        db.commit()
+        db.refresh(project)
+        return project
+    except SQLAlchemyError:
+        db.rollback()
+        raise
 
 
 def delete_project(db: Session, project: Project):
-    db.delete(project)
-    db.commit()
+    try:
+        db.delete(project)
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        raise
