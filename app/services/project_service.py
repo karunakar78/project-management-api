@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 
 from app.models.project import Project
 from app.schemas.project import ProjectCreate, ProjectUpdate
+from app.exceptions import ProjectNotFoundError
 
 
 def create_project(db: Session, project_data: ProjectCreate):
@@ -18,7 +19,12 @@ def create_project(db: Session, project_data: ProjectCreate):
 
 
 def get_project(db: Session, project_id: int):
-    return db.get(Project, project_id)
+    project = db.get(Project, project_id)
+
+    if project is None:
+        raise ProjectNotFoundError("Project not found")
+
+    return project
 
 
 def get_projects(db: Session, skip: int = 0, limit: int = 10):

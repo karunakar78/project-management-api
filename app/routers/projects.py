@@ -42,15 +42,7 @@ def get_project(
     project_id: int,
     db: Session = Depends(get_db)
 ):
-    project = project_service.get_project(db, project_id)
-
-    if project is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Project not found"
-        )
-
-    return project
+    return project_service.get_project(db, project_id)
 
 
 @router.patch("/{project_id}", response_model=ProjectResponse)
@@ -61,14 +53,10 @@ def update_project(
 ):
     project = project_service.get_project(db, project_id)
 
-    if project is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Project not found"
-        )
-
     try:
-        return project_service.update_project(db, project, project_data)
+        return project_service.update_project(
+            db, project, project_data
+        )
     except SQLAlchemyError:
         db.rollback()
         raise HTTPException(
@@ -86,12 +74,6 @@ def delete_project(
     db: Session = Depends(get_db)
 ):
     project = project_service.get_project(db, project_id)
-
-    if project is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Project not found"
-        )
 
     try:
         project_service.delete_project(db, project)
