@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
+from typing import Literal
 
 from app.database import get_db
 from app.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
@@ -32,9 +33,17 @@ def create_project(
 def get_projects(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=10, ge=1, le=100),
+    search: str | None = Query(default=None),
+    sort_by: Literal["id", "name"] = Query(default="id"),
     db: Session = Depends(get_db)
 ):
-    return project_service.get_projects(db, skip, limit)
+    return project_service.get_projects(
+        db,
+        skip=skip,
+        limit=limit,
+        search=search,
+        sort_by=sort_by
+    )
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)

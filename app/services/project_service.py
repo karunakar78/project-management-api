@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from typing import Literal
 
 from app.models.project import Project
 from app.schemas.project import ProjectCreate, ProjectUpdate
@@ -31,8 +32,24 @@ def get_project(db: Session, project_id: int):
     return project
 
 
-def get_projects(db: Session, skip: int = 0, limit: int = 10):
-    return db.query(Project).offset(skip).limit(limit).all()
+def get_projects(
+    db: Session,
+    skip: int = 0,
+    limit: int = 10,
+    search: str | None = None,
+    sort_by: Literal["id", "name"] = "id"
+):
+    query = db.query(Project)
+
+    if search:
+        query = query.filter(
+            Project.name.ilike(f"%{search}%")
+        )
+
+    sort_column = getattr(Project, sort_by)
+    query = query.order_by(sort_column)
+
+    return query.offset(skip).limit(limit).all()
 
 
 def update_project(

@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 from pydantic import BaseModel, Field, field_validator
+from datetime import datetime
 
 
 class ProjectCreate(BaseModel):
@@ -23,3 +24,4 @@ class ProjectResponse(BaseModel):
     id: int
     name: str
     description: str
+    created_at: datetime
