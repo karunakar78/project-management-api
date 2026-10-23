@@ -71,10 +71,13 @@ def get_current_user(
 
         user_id = payload.get("sub")
 
-        if user_id is None:
+        if not isinstance(user_id, str) or not user_id.isdigit():
             raise credentials_exception
 
         user_id = int(user_id)
+
+        if user_id <= 0:
+            raise credentials_exception
 
     except (jwt.InvalidTokenError, ValueError):
         raise credentials_exception

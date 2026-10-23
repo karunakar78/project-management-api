@@ -3,7 +3,13 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+from app.models.user import User
+from app.security import hash_password, create_access_token
 from typing import Literal
+from datetime import datetime, timedelta, timezone
+import jwt
+
+from app.security import SECRET_KEY, ALGORITHM
 
 from app.main import app
 from app.database import Base, get_db
@@ -32,15 +38,39 @@ def override_get_db():
         db.close()
 
 
+
 @pytest.fixture(autouse=True)
 def setup_test_database():
     Base.metadata.create_all(bind=engine)
     app.dependency_overrides[get_db] = override_get_db
 
+    # Create a test user.
+    db = TestingSessionLocal()
+    try:
+        user = User(
+            email="test@example.com",
+            hashed_password=hash_password("TestPassword123!")
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        # Generate a real JWT for the test user.
+        token = create_access_token(user.id)
+    finally:
+        db.close()
+
+    # Authenticate requests made by this test.
+    client.headers.update({
+        "Authorization": f"Bearer {token}"
+    })
+
     yield
 
+    client.headers.pop("Authorization", None)
     app.dependency_overrides.clear()
     Base.metadata.drop_all(bind=engine)
+
 
 
 client = TestClient(app)
@@ -51,8 +81,8 @@ def test_read_nonexistent_project():
 
     assert response.status_code == 404
     assert response.json() == {
-        "detail": "Project not found"
-    }
+    "detail": "Project 999999 not found"
+}
 
 def test_create_project():
     response = client.post(
@@ -249,3 +279,160 @@ def test_list_projects_invalid_sort_by():
     response = client.get("/projects/?sort_by=description")
 
     assert response.status_code == 422
+
+
+def test_projects_require_authentication():
+    response = client.get(
+        "/projects/",
+        headers={"Authorization": ""}
+    )
+
+    assert response.status_code == 401
+
+
+def test_user_cannot_access_another_users_project():
+    # User A is the authenticated user from the fixture.
+    create_response = client.post(
+        "/projects/",
+        json={
+            "name": "User A Project",
+            "description": "Private project"
+        }
+    )
+
+    assert create_response.status_code == 201
+    project_id = create_response.json()["id"]
+
+    # Create User B in the same test database.
+    db = TestingSessionLocal()
+    try:
+        user_b = User(
+            email="userb@example.com",
+            hashed_password=hash_password("UserBPassword123!")
+        )
+        db.add(user_b)
+        db.commit()
+        db.refresh(user_b)
+
+        user_b_token = create_access_token(user_b.id)
+    finally:
+        db.close()
+
+    # Switch authentication from User A to User B.
+    client.headers.update({
+        "Authorization": f"Bearer {user_b_token}"
+    })
+
+    # User B must not be able to access User A's project.
+    response = client.get(f"/projects/{project_id}")
+    assert response.status_code == 404
+
+    response = client.patch(
+        f"/projects/{project_id}",
+        json={"name": "Hijacked Project"}
+    )
+    assert response.status_code == 404
+
+    response = client.delete(f"/projects/{project_id}")
+    assert response.status_code == 404
+
+
+def test_users_only_see_their_own_projects():
+    # User A creates a project.
+    response = client.post(
+        "/projects/",
+        json={
+            "name": "User A Project",
+            "description": "Owned by User A"
+        }
+    )
+    assert response.status_code == 201
+
+    # Create User B and generate a token.
+    db = TestingSessionLocal()
+    try:
+        user_b = User(
+            email="userb@example.com",
+            hashed_password=hash_password("UserBPassword123!")
+        )
+        db.add(user_b)
+        db.commit()
+        db.refresh(user_b)
+
+        token_b = create_access_token(user_b.id)
+    finally:
+        db.close()
+
+    # Switch to User B.
+    client.headers.update({
+        "Authorization": f"Bearer {token_b}"
+    })
+
+    # User B should not see User A's project.
+    response = client.get("/projects/")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_registration_rejects_duplicate_email():
+    from app.routers.users import register_user
+    from app.schemas.user import UserCreate
+
+    db = TestingSessionLocal()
+    try:
+        try:
+            register_user(
+                UserCreate(
+                    email="test@example.com",
+                    password="AnotherPassword123!"
+                ),
+                db
+            )
+            assert False, "Expected duplicate registration to fail"
+        except Exception as exc:
+            from fastapi import HTTPException
+
+            assert isinstance(exc, HTTPException)
+            assert exc.status_code == 409
+    finally:
+        db.close()
+
+
+def test_registration_rejects_invalid_email():
+    response = client.post(
+        "/users/register",
+        json={
+            "email": "not-an-email",
+            "password": "StrongPassword123!"
+        }
+    )
+
+    assert response.status_code == 422
+
+
+def test_projects_reject_invalid_token():
+    response = client.get(
+        "/projects/",
+        headers={"Authorization": "Bearer invalid.token.value"}
+    )
+
+    assert response.status_code == 401
+
+
+def test_projects_reject_expired_token():
+    expired_token = jwt.encode(
+        {
+            "sub": "1",
+            "exp": datetime.now(timezone.utc) - timedelta(minutes=1)
+        },
+        SECRET_KEY,
+        algorithm=ALGORITHM
+    )
+
+    response = client.get(
+        "/projects/",
+        headers={"Authorization": f"Bearer {expired_token}"}
+    )
+
+    assert response.status_code == 401
