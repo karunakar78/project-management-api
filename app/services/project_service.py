@@ -7,10 +7,16 @@ from app.exceptions import ProjectNotFoundError
 from sqlalchemy.exc import SQLAlchemyError
 
 
-def create_project(db: Session, project_data: ProjectCreate):
+
+def create_project(
+    db: Session,
+    project_data: ProjectCreate,
+    owner_id: int
+):
     project = Project(
         name=project_data.name,
-        description=project_data.description
+        description=project_data.description,
+        owner_id=owner_id
     )
 
     try:
@@ -23,23 +29,39 @@ def create_project(db: Session, project_data: ProjectCreate):
         raise
 
 
-def get_project(db: Session, project_id: int):
-    project = db.get(Project, project_id)
+def get_project(
+    db: Session,
+    project_id: int,
+    owner_id: int
+):
+    project = (
+        db.query(Project)
+        .filter(
+            Project.id == project_id,
+            Project.owner_id == owner_id
+        )
+        .first()
+    )
 
     if project is None:
-        raise ProjectNotFoundError("Project not found")
+        raise ProjectNotFoundError(
+            f"Project {project_id} not found"
+        )
 
     return project
 
 
 def get_projects(
     db: Session,
+    owner_id: int,
     skip: int = 0,
     limit: int = 10,
     search: str | None = None,
     sort_by: Literal["id", "name"] = "id"
 ):
-    query = db.query(Project)
+    query = db.query(Project).filter(
+        Project.owner_id == owner_id
+    )
 
     if search:
         query = query.filter(

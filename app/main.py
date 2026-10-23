@@ -6,6 +6,7 @@ from app.routers.projects import router as project_router
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from app.exceptions import ProjectNotFoundError
+from app.routers import users
 
 Base.metadata.create_all(bind=engine)
 
@@ -21,7 +22,7 @@ def root():
 
 
 app.include_router(project_router)
-
+app.include_router(users.router)
 
 @app.exception_handler(ProjectNotFoundError)
 async def project_not_found_handler(
